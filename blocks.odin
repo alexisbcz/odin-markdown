@@ -859,8 +859,9 @@ finalize :: proc(p: ^Parser, block: ^Node, line_number: int) -> Error {
 			block.end_line = block.start_line + max(count_lines(block.literal) - 1, 0)
 		}
 	case .Html_Block:
-		content := string(st.content[:])
-		block.literal = content[:trailing_blank_lines_start(content)]
+		// Types 6 and 7 end before a blank line. Types 1 to 5 keep blank lines
+		// up to their end condition or the end of their container, as cmark does.
+		block.literal = string(st.content[:])
 	case .Item:
 		if block.last_child != nil {
 			block.end_line = block.last_child.end_line

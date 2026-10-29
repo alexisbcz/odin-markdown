@@ -517,6 +517,41 @@ test_nil_document_is_harmless :: proc(t: ^testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// HTML blocks. These cases aren't in the spec examples; the expected output is
+// what the cmark and commonmark.js reference implementations produce.
+
+@(test)
+test_html_block_keeps_trailing_blank_lines :: proc(t: ^testing.T) {
+	// Types 1 to 5 only end at their end condition, so blank lines up to the
+	// end of the document or container belong to the block.
+	expect_html(t, "<!--\n\n", "<!--\n\n")
+	expect_html(t, "<!--\n  \n", "<!--\n  \n")
+	expect_html(t, "<pre>\nx\n\n\n", "<pre>\nx\n\n\n")
+	expect_html(t, "> <!--\n>\n", "<blockquote>\n<!--\n\n</blockquote>\n")
+	expect_html(t, "- <!--\n\n- x\n", "<ul>\n<li>\n<!--\n\n</li>\n<li>x</li>\n</ul>\n")
+	// Types 6 and 7 end at a blank line, which stays outside the block.
+	expect_html(t, "<div>\n\nx\n", "<div>\n<p>x</p>\n")
+}
+
+@(test)
+test_html_block_type_7_closing_raw_tags :: proc(t: ^testing.T) {
+	// No type 1 block starts with `</pre>`, so a lone closing tag is type 7.
+	expect_html(t, "</pre>\n*x*\n", "</pre>\n*x*\n")
+	expect_html(t, "</script>\n", "</script>\n")
+	expect_html(t, "<pre/>\nx\n", "<pre/>\nx\n")
+	// Type 7 still can't interrupt a paragraph.
+	expect_html(t, "a\n</pre>\n", "<p>a\n</pre></p>\n")
+}
+
+@(test)
+test_html_block_tree_literal_keeps_blank_lines :: proc(t: ^testing.T) {
+	doc, err := markdown.parse("<!--\nx\n\n")
+	defer markdown.document_destroy(doc)
+	testing.expect_value(t, err, nil)
+	testing.expect_value(t, doc.root.first_child.literal, "<!--\nx\n\n")
+}
+
+// ---------------------------------------------------------------------------
 // Pathological input. Each case would take quadratic time or overflow the
 // stack in a naive implementation; here they must finish quickly.
 

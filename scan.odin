@@ -310,15 +310,12 @@ html_block_start :: proc(s: string, can_be_type_7: bool) -> int {
 		return 0
 	}
 	// Type 7: one complete open or closing tag, then only whitespace.
+	// The spec text excludes pre, script, style and textarea here, but a line
+	// that opens one of those as type 1 never reaches this point. Like cmark and
+	// commonmark.js, accept the rest, such as `</pre>` or `<pre/>`.
 	n := scan_closing_tag(s) if peek(s, 1) == '/' else scan_open_tag(s)
 	if n == 0 || !is_blank(s[n:]) {
 		return 0
-	}
-	tag_end := scan_tag_name(s, name_start)
-	for tag in HTML_RAW_TAGS {
-		if equal_fold(s[name_start:tag_end], tag) {
-			return 0
-		}
 	}
 	return 7
 }
