@@ -349,6 +349,57 @@ test_allocation_failures_return_errors_without_leaks :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_allocation_failures_with_every_construct :: proc(t: ^testing.T) {
+	// Every construct, extensions and safe mode on, and big enough that the
+	// arena needs several blocks plus a dedicated block for the input copy.
+	unit :: "# H &amp; &copy;\n\nSetext\n---\n\n> - [l](/u \"t\") ![i](/p.png) <http://a.b> `c` \\* ~~s~~ **b** _e_\n>   1. x\n>\n>      y\n\n" +
+		"| a | b |\n| :- | -: |\n| 1 | `2` |\n\n<div>\nraw\n</div>\n\n<!--\nc\n\n-->\n\n    indented\n\n~~~ odin\nf :: proc() {}\n~~~\n\n[r]: /ref\n[r] *<span>x</span>*\n\n***\n\n"
+	input := strings.repeat(unit, 300)
+	defer delete(input)
+	testing.expect(t, len(input) > 64 * 1024)
+	options := markdown.Options{extensions = markdown.GFM, safe = true}
+
+	expected, expected_err := markdown.to_html(input, options)
+	defer delete(expected)
+	testing.expect_value(t, expected_err, nil)
+
+	succeeded := false
+	for budget in 0 ..< 10_000 {
+		track: mem.Tracking_Allocator
+		mem.tracking_allocator_init(&track, context.allocator)
+		defer mem.tracking_allocator_destroy(&track)
+		failing := Failing_Allocator {
+			backing   = mem.tracking_allocator(&track),
+			remaining = budget,
+		}
+		allocator := mem.Allocator{failing_allocator_proc, &failing}
+
+		doc, err := markdown.parse(input, options, allocator)
+		if err == nil {
+			html, render_err := markdown.render_html(doc, allocator)
+			if render_err == nil {
+				testing.expect(t, html == expected, "output differs from the run with a normal allocator")
+				delete(html, allocator)
+				succeeded = true
+			} else {
+				testing.expect_value(t, render_err, markdown.Error(mem.Allocator_Error.Out_Of_Memory))
+				testing.expect_value(t, html, "")
+			}
+			markdown.document_destroy(doc)
+		} else {
+			testing.expect_value(t, err, markdown.Error(mem.Allocator_Error.Out_Of_Memory))
+			testing.expect(t, doc == nil)
+		}
+		testing.expectf(t, len(track.allocation_map) == 0, "budget %d leaked %d allocations", budget, len(track.allocation_map))
+		testing.expectf(t, len(track.bad_free_array) == 0, "budget %d made bad frees", budget)
+		if succeeded || len(track.allocation_map) > 0 {
+			break
+		}
+	}
+	testing.expect(t, succeeded, "rendering never succeeded")
+}
+
+@(test)
 test_tracking_allocator_sees_no_leaks :: proc(t: ^testing.T) {
 	track: mem.Tracking_Allocator
 	mem.tracking_allocator_init(&track, context.allocator)
