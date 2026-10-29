@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-29
+
+### Fixed
+
+- HTML blocks of types 1 to 5 keep the blank lines at their end, as `cmark` and `commonmark.js` do. They used to lose them at the end of the document or of their container.
+- A line holding only `</pre>`, `</script>`, `</style>`, `</textarea>` or a self-closing `<pre/>` now starts a type 7 HTML block, as it does in `cmark` and `commonmark.js`, instead of a paragraph.
+- A list item that starts with a link reference definition no longer looks empty. A second blank line no longer ends it early, and a blank line after the definition now makes the list loose.
+- A GFM table stops after it has added 524,288 (`0x80000`) empty cells to pad short rows, the `cmark-gfm` limit. Before, 18 KB of input could render to 90 MB of HTML.
+- Unclosed inline comments, processing instructions, CDATA sections and declarations no longer take quadratic time.
+- Link destinations allow at most 32 levels of nested parentheses, as in `cmark`. This keeps runs of `[a](` linear.
+
 ## [0.1.0] - 2026-10-29
 
 ### Added
@@ -20,5 +31,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - NUL bytes and invalid UTF-8 become U+FFFD instead of failing.
 - Examples `basic` and `toc`.
 
-[Unreleased]: https://github.com/alexisbcz/odin-markdown/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/alexisbcz/odin-markdown/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/alexisbcz/odin-markdown/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/alexisbcz/odin-markdown/releases/tag/v0.1.0

@@ -113,7 +113,9 @@ The zero value is strict CommonMark with raw HTML passed through, as the spec re
 
 - CommonMark 0.31.2: all 652 spec examples pass byte for byte, including tabs, lazy continuation lines, list tightness, the seven kinds of HTML blocks, link reference definitions, the emphasis delimiter rules and all 2,125 HTML5 named entities.
 - GitHub Flavored Markdown: pipe tables with alignment, escaped pipes and ragged rows, and strikethrough with one or two tildes. The other GFM extensions, such as task lists, extended autolinks and footnotes, aren't implemented yet.
-- The parser guards against pathological input. Deeply nested brackets, emphasis and backticks run in linear or near-linear time, and the renderer walks the tree without recursion.
+- The parser guards against pathological input. Deeply nested brackets, emphasis, backticks and unclosed raw HTML run in linear or near-linear time, and the renderer walks the tree without recursion.
+- Like `cmark`, the parser sets two limits that the spec permits. A link destination may nest at most 32 levels of parentheses. A GFM table stops after it adds 524,288 (`0x80000`) empty cells to pad short rows, as in `cmark-gfm`.
+- A few cases that the spec examples don't cover follow `cmark` and `commonmark.js`. For example, a lone `</pre>` line starts an HTML block.
 
 ## Examples
 
