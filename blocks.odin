@@ -25,6 +25,8 @@ Block_State :: struct {
 	// definitions. It stays in the tree until block parsing ends, so list
 	// tightness and the empty item rule still see it, as in commonmark.js.
 	refs_only:     bool,
+	// autocompleted counts the empty cells a Table has added to pad short rows.
+	autocompleted: int,
 	marker_offset: int,
 	padding:       int,
 	depth:         int,
@@ -382,7 +384,14 @@ incorporate_line :: proc(p: ^Parser, line: string) -> Error {
 	case .Table:
 		// The delimiter row leaves the offset at the end of the line, so it adds no row.
 		if p.offset < len(p.line) && !p.blank {
-			add_table_row(p, container, p.line[p.offset:]) or_return
+			added := add_table_row(p, container, p.line[p.offset:]) or_return
+			if !added {
+				// The table has padded too many cells; the line starts a paragraph instead.
+				finalize(p, container, p.line_number - 1) or_return
+				add_child(p, .Paragraph) or_return
+				advance_next_nonspace(p)
+				add_line(p) or_return
+			}
 		}
 	case:
 		if p.offset < len(p.line) && !p.blank {

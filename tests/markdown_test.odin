@@ -698,6 +698,38 @@ test_pathological_deep_block_quotes_within_limit :: proc(t: ^testing.T) {
 }
 
 @(test)
+test_pathological_table_padding_is_capped :: proc(t: ^testing.T) {
+	// Short rows in a wide table get padded with empty cells, so a few KB of
+	// input could render to many MB. Like cmark-gfm, stop the table once it
+	// has padded 0x80000 cells; the rest of the lines become a paragraph.
+	b := strings.builder_make()
+	defer strings.builder_destroy(&b)
+	for _ in 0 ..< 2_000 {
+		strings.write_string(&b, "|a")
+	}
+	strings.write_string(&b, "|\n")
+	for _ in 0 ..< 2_000 {
+		strings.write_string(&b, "|-")
+	}
+	strings.write_string(&b, "|\n")
+	for _ in 0 ..< 1_000 {
+		strings.write_string(&b, "b\n")
+	}
+	html, err := markdown.to_html(strings.to_string(b), GFM)
+	defer delete(html)
+	testing.expect_value(t, err, nil)
+	// 262 rows pad 1,999 cells each and fit; the 263rd would go over.
+	testing.expect_value(t, strings.count(html, "<tr>"), 1 + 262)
+	testing.expect(t, strings.contains(html, "</table>\n<p>b\nb\n"))
+	testing.expect(t, len(html) < 8 * 1024 * 1024)
+}
+
+@(test)
+test_table_padding_below_cap_is_kept :: proc(t: ^testing.T) {
+	expect_html(t, "| a | b | c |\n| - | - | - |\n| 1 |\n", "<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n<th>c</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>1</td>\n<td></td>\n<td></td>\n</tr>\n</tbody>\n</table>\n", GFM)
+}
+
+@(test)
 test_many_reference_definitions :: proc(t: ^testing.T) {
 	b := strings.builder_make()
 	defer strings.builder_destroy(&b)

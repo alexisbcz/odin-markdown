@@ -119,10 +119,25 @@ add_row :: proc(p: ^Parser, table: ^Node, cells: []string, header: bool) -> Erro
 	return nil
 }
 
+/*
+MAX_AUTOCOMPLETED_CELLS caps how many empty cells one table may add to pad
+short rows. Without it a wide header over many one-cell rows renders a few KB
+of input into hundreds of MB. cmark-gfm uses the same limit.
+*/
 @(private)
-add_table_row :: proc(p: ^Parser, table: ^Node, line: string) -> Error {
+MAX_AUTOCOMPLETED_CELLS :: 0x80000
+
+// add_table_row appends the body row in `line`, or returns added = false when padding it would pass MAX_AUTOCOMPLETED_CELLS.
+@(private)
+add_table_row :: proc(p: ^Parser, table: ^Node, line: string) -> (added: bool, err: Error) {
 	cells := split_row(line, p.allocator) or_return
-	return add_row(p, table, cells[:], false)
+	missing := max(len(table.state.alignments) - len(cells), 0)
+	if table.state.autocompleted + missing > MAX_AUTOCOMPLETED_CELLS {
+		return false, nil
+	}
+	table.state.autocompleted += missing
+	add_row(p, table, cells[:], false) or_return
+	return true, nil
 }
 
 @(private)
