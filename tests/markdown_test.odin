@@ -5,6 +5,7 @@ import markdown ".."
 import "core:mem"
 import "core:strings"
 import "core:testing"
+import "core:time"
 
 // expect_html renders `input` with `options` and compares the result with `expected`.
 expect_html :: proc(t: ^testing.T, input, expected: string, options := markdown.Options{}, loc := #caller_location) {
@@ -695,6 +696,56 @@ test_pathological_deep_block_quotes_within_limit :: proc(t: ^testing.T) {
 	defer delete(html)
 	testing.expect_value(t, err, nil)
 	testing.expect_value(t, strings.count(html, "<blockquote>"), markdown.DEFAULT_MAX_NESTING)
+}
+
+// expect_fast renders `input` and fails if that takes longer than `limit`.
+expect_fast :: proc(t: ^testing.T, input: string, limit: time.Duration, loc := #caller_location) -> (html: string) {
+	start := time.tick_now()
+	err: markdown.Error
+	html, err = markdown.to_html(input)
+	elapsed := time.tick_since(start)
+	testing.expect_value(t, err, nil, loc)
+	testing.expectf(t, elapsed < limit, "took %v, limit %v", elapsed, limit, loc = loc)
+	return html
+}
+
+@(test)
+test_pathological_unclosed_inline_html :: proc(t: ^testing.T) {
+	// Each opener used to scan to the end of the paragraph for its terminator.
+	for opener in ([]string{"a <!-- ", "a <? ", "a <![CDATA[ ", "a <!A "}) {
+		input := strings.repeat(opener, 20_000)
+		defer delete(input)
+		html := expect_fast(t, input, time.Second)
+		defer delete(html)
+		testing.expect(t, strings.has_prefix(html, "<p>a &lt;"))
+	}
+	// A terminator after the openers still closes the last one.
+	expect_html(t, "a <!-- b <!-- c -->", "<p>a <!-- b <!-- c --></p>\n")
+	expect_html(t, "x <? a <? b ?>", "<p>x <? a <? b ?></p>\n")
+}
+
+@(test)
+test_pathological_link_destination_parens :: proc(t: ^testing.T) {
+	// Unbalanced parentheses used to make every `[a](` scan to the end.
+	input := strings.repeat("[a](", 30_000)
+	defer delete(input)
+	html := expect_fast(t, input, time.Second)
+	defer delete(html)
+	testing.expect(t, !strings.contains(html, "<a "))
+}
+
+@(test)
+test_link_destination_paren_depth_limit :: proc(t: ^testing.T) {
+	// The spec lets implementations limit nesting; cmark allows 32 levels.
+	ok := strings.concatenate({"[a](", strings.repeat("(", 32, context.temp_allocator), "x", strings.repeat(")", 32, context.temp_allocator), ")"}, context.temp_allocator)
+	html, err := markdown.to_html(ok, {}, context.temp_allocator)
+	testing.expect_value(t, err, nil)
+	testing.expect(t, strings.has_prefix(html, "<p><a href=\"((((("), html)
+	deep := strings.concatenate({"[a](", strings.repeat("(", 33, context.temp_allocator), "x", strings.repeat(")", 33, context.temp_allocator), ")"}, context.temp_allocator)
+	html, err = markdown.to_html(deep, {}, context.temp_allocator)
+	testing.expect_value(t, err, nil)
+	testing.expect(t, !strings.contains(html, "<a "), html)
+	free_all(context.temp_allocator)
 }
 
 @(test)

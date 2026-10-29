@@ -43,7 +43,29 @@ Inline_Parser :: struct {
 	brackets:         ^Bracket,
 	// no_closing_ticks[n] is true once a scan found no closing run of n backticks after some opener.
 	no_closing_ticks: [TICK_CACHE_SIZE]bool,
+	// no_html_end[k] is true once a scan for the terminator of inline HTML
+	// kind k failed. Later openers would search a suffix of the same text, so
+	// they fail too, and skipping them keeps unclosed `<!--` runs linear.
+	no_html_end:      [Html_Terminator]bool,
 }
+
+// Html_Terminator names the kinds of inline HTML that search ahead for a fixed terminator.
+@(private)
+Html_Terminator :: enum {
+	None,
+	Processing_Instruction,
+	Comment,
+	Cdata,
+	Declaration,
+}
+
+/*
+MAX_LINK_PAREN_DEPTH limits nested parentheses in a link destination. The
+spec allows a limit; cmark uses 32. Without one, a run of `[a](` makes
+every opener scan to the end of the paragraph.
+*/
+@(private)
+MAX_LINK_PAREN_DEPTH :: 32
 
 @(private)
 parse_inlines :: proc(p: ^Parser, block: ^Node) -> Error {
@@ -551,6 +573,9 @@ parse_link_destination :: proc(ip: ^Inline_Parser) -> (dest: string, ok: bool, e
 			}
 			if c == '(' {
 				parens += 1
+				if parens > MAX_LINK_PAREN_DEPTH {
+					return "", false, nil
+				}
 			} else if c == ')' {
 				if parens < 1 {
 					break
@@ -734,8 +759,16 @@ parse_autolink :: proc(ip: ^Inline_Parser, block: ^Node) -> (handled: bool, err:
 
 @(private)
 parse_html_tag :: proc(ip: ^Inline_Parser, block: ^Node) -> (handled: bool, err: Error) {
-	n := scan_html_tag(ip.subject[ip.pos:])
+	rest := ip.subject[ip.pos:]
+	kind := html_terminator(rest)
+	if ip.no_html_end[kind] {
+		return false, nil
+	}
+	n := scan_html_tag(rest)
 	if n == 0 {
+		if kind != .None {
+			ip.no_html_end[kind] = true
+		}
 		return false, nil
 	}
 	node := add_inline(ip, block, .Html_Inline) or_return

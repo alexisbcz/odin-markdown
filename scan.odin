@@ -163,6 +163,36 @@ scan_html_tag :: proc(s: string) -> int {
 	return scan_open_tag(s)
 }
 
+/*
+html_terminator returns which inline HTML kind `s` opens when scan_html_tag
+would search ahead for a fixed terminator, or .None. When it returns a kind
+and scan_html_tag returns 0, the terminator is missing from all of `s`.
+*/
+@(private)
+html_terminator :: proc(s: string) -> Html_Terminator {
+	if len(s) < 3 || s[0] != '<' {
+		return .None
+	}
+	switch s[1] {
+	case '?':
+		return .Processing_Instruction
+	case '!':
+		if len(s) >= 4 && s[:4] == "<!--" {
+			if (len(s) >= 5 && s[:5] == "<!-->") || (len(s) >= 6 && s[:6] == "<!--->") {
+				return .None
+			}
+			return .Comment
+		}
+		if len(s) >= 9 && s[:9] == "<![CDATA[" {
+			return .Cdata
+		}
+		if is_ascii_alpha(int(s[2])) {
+			return .Declaration
+		}
+	}
+	return .None
+}
+
 // scan_autolink_uri matches `<scheme:rest>` with a 2 to 32 character scheme.
 @(private)
 scan_autolink_uri :: proc(s: string) -> int {
