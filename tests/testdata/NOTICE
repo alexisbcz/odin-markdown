@@ -1,0 +1,9 @@
+commonmark-spec-0.31.2.json holds the examples of the CommonMark Spec 0.31.2,
+downloaded unchanged from https://spec.commonmark.org/0.31.2/spec.json.
+
+CommonMark Spec, copyright John MacFarlane, licensed under the Creative Commons
+Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0):
+https://creativecommons.org/licenses/by-sa/4.0/
+
+This file is test data only. It isn't part of the MIT-licensed library and isn't
+compiled into it.
