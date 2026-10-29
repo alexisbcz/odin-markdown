@@ -21,6 +21,10 @@ Block_State :: struct {
 	fence_length:  int,
 	fence_offset:  int,
 	html_type:     int,
+	// refs_only marks a closed paragraph that held only link reference
+	// definitions. It stays in the tree until block parsing ends, so list
+	// tightness and the empty item rule still see it, as in commonmark.js.
+	refs_only:     bool,
 	marker_offset: int,
 	padding:       int,
 	depth:         int,
@@ -835,7 +839,7 @@ finalize :: proc(p: ^Parser, block: ^Node, line_number: int) -> Error {
 	case .Paragraph:
 		rest := resolve_references(p, string(st.content[:])) or_return
 		if is_blank(rest) {
-			unlink(block)
+			st.refs_only = true
 		} else {
 			st.text = rest
 		}
@@ -924,13 +928,22 @@ next_block_preorder :: proc(node, root: ^Node) -> ^Node {
 
 @(private)
 process_inlines :: proc(p: ^Parser, root: ^Node) -> Error {
-	for node := root; node != nil; node = next_block_preorder(node, root) {
+	for node := root; node != nil; {
+		// Find the next block first, because a paragraph may unlink itself.
+		next := next_block_preorder(node, root)
 		#partial switch node.kind {
-		case .Paragraph, .Heading, .Table_Cell:
+		case .Paragraph:
+			if node.state.refs_only {
+				unlink(node)
+			} else {
+				parse_inlines(p, node) or_return
+			}
+		case .Heading, .Table_Cell:
 			parse_inlines(p, node) or_return
 		}
 		node.state.content = nil
 		node.state.text = ""
+		node = next
 	}
 	return nil
 }

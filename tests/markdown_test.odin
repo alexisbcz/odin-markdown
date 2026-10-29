@@ -552,6 +552,35 @@ test_html_block_tree_literal_keeps_blank_lines :: proc(t: ^testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Link reference definitions are leaf blocks (spec section 4.7), so they count
+// as list item content even though they render as nothing.
+
+@(test)
+test_reference_definition_makes_list_item_loose :: proc(t: ^testing.T) {
+	expect_html(t, "- [x]: /u\n\n  b\n", "<ul>\n<li>\n<p>b</p>\n</li>\n</ul>\n")
+}
+
+@(test)
+test_reference_definition_is_not_an_empty_item_start :: proc(t: ^testing.T) {
+	// Only an item that starts with a blank line ends at a second blank line.
+	expect_html(t, "- [x]: /u\n\n\n  b\n", "<ul>\n<li>\n<p>b</p>\n</li>\n</ul>\n")
+	expect_html(t, "-\n\n  b\n", "<ul>\n<li></li>\n</ul>\n<p>b</p>\n")
+}
+
+@(test)
+test_reference_definitions_leave_no_nodes :: proc(t: ^testing.T) {
+	doc, err := markdown.parse("- [x]: /u\n\n  [x]\n\n[y]: /v\n")
+	defer markdown.document_destroy(doc)
+	testing.expect_value(t, err, nil)
+	list := doc.root.first_child
+	testing.expect_value(t, list.kind, markdown.Node_Kind.List)
+	testing.expect(t, list.next == nil, "the trailing definition must not leave a node")
+	item := list.first_child
+	testing.expect(t, item.first_child != nil && item.first_child == item.last_child, "the item keeps only its paragraph")
+	testing.expect_value(t, item.first_child.first_child.kind, markdown.Node_Kind.Link)
+}
+
+// ---------------------------------------------------------------------------
 // Pathological input. Each case would take quadratic time or overflow the
 // stack in a naive implementation; here they must finish quickly.
 
